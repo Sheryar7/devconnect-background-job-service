@@ -1,4 +1,4 @@
-# Dependencies
+# Dependencies across all workspaces
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -7,6 +7,8 @@ lerna-debug.log*
 
 # Output & Build
 dist/
+.next/
+out/
 coverage/
 *.tsbuildinfo
 

@@ -1,4 +1,4 @@
-# Asynchronous Background Job Processing Service & Dashboard
+# Asynchronous Background Job Processing Service & Dashboard (Monorepo)
 
 [![NestJS](https://img.shields.io/badge/NestJS-10.3-E0234E?style=flat&logo=nestjs&logoColor=white)](https://nestjs.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-14.2-000000?style=flat&logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -8,31 +8,61 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-BullMQ-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Tests](https://img.shields.io/badge/Tests-E2E%20Passing-brightgreen?style=flat)](./test/jobs.e2e-spec.ts)
+[![Tests](https://img.shields.io/badge/Tests-11%2F11%20E2E%20Passing-brightgreen?style=flat)](./backend/test/jobs.e2e-spec.ts)
 
-A production-grade, distributed asynchronous data import and processing engine built with **NestJS**, **TypeScript**, **PostgreSQL 16**, and **Redis (BullMQ)**, accompanied by a modern **Next.js (App Router) & Tailwind CSS Frontend Dashboard**. Designed strictly according to the *Final Project: Service with a Job Running Behind It (Brief B)* specification.
+A clean, decoupled monorepo containing a production-grade asynchronous background data ingestion engine built with **NestJS**, **TypeScript**, **PostgreSQL 16**, and **Redis (BullMQ)**, alongside a real-time **Next.js (App Router) & Tailwind CSS Frontend Dashboard**. Designed strictly according to the *Final Project: Service with a Job Running Behind It (Brief B)* specification.
 
 ---
 
 ## 📑 Table of Contents
-- [1. Architecture Overview](#1-architecture-overview)
-- [2. Next.js Frontend Dashboard (UI Guide)](#2-nextjs-frontend-dashboard-ui-guide)
-- [3. Interactive API Documentation & Swagger](#3-interactive-api-documentation--swagger)
+- [1. Monorepo Structure](#1-monorepo-structure)
+- [2. System Architecture](#2-system-architecture)
+- [3. Next.js Frontend Dashboard (UI Features)](#3-nextjs-frontend-dashboard-ui-features)
 - [4. Fast Request Path & Asynchronous Decoupling](#4-fast-request-path--asynchronous-decoupling)
 - [5. Worker Failure Recovery (When the Worker Dies Mid-Job)](#5-worker-failure-recovery-when-the-worker-dies-mid-job)
 - [6. Idempotent Processing Guarantees](#6-idempotent-processing-guarantees)
 - [7. Authentication & User Row Isolation](#7-authentication--user-row-isolation)
-- [8. Local Setup & Quick-Start](#8-local-setup--quick-start)
+- [8. Quick-Start & Monorepo Orchestration](#8-quick-start--monorepo-orchestration)
 - [9. Automated Test Suite](#9-automated-test-suite)
 - [10. Production Cloud Deployment Guide](#10-production-cloud-deployment-guide)
 
 ---
 
-## 1. Architecture Overview
+## 1. Monorepo Structure
+
+```text
+background-job-service/
+├── backend/                  # Complete NestJS API & Worker
+│   ├── src/                  # Controllers, services, entities, auth & processors
+│   ├── test/                 # Automated E2E test suite (11 test cases)
+│   ├── Dockerfile            # Multi-stage production container build
+│   ├── nest-cli.json
+│   ├── tsconfig.json
+│   ├── tsconfig.build.json
+│   ├── .env.example          # Sample environment variables template
+│   ├── .env                  # Local backend configuration
+│   └── package.json          # Backend-specific dependencies & scripts
+├── frontend/                 # Complete Next.js 14 & Tailwind Dashboard
+│   ├── app/                  # App Router pages and layout
+│   ├── components/           # UI components (Tracker, Import Panel, Latency Meter, Table)
+│   ├── context/              # Authentication context & session manager
+│   ├── lib/                  # Typed API fetch client with latency tracking
+│   ├── Dockerfile            # Multi-stage production container build for frontend
+│   ├── .env.local            # Frontend environment (NEXT_PUBLIC_API_URL)
+│   └── package.json          # Frontend-specific dependencies & scripts
+├── docker-compose.yml        # Orchestrates Postgres, Redis, backend, frontend
+├── .gitignore                # Strictly ignores root, backend/, and frontend/ build & node_modules
+├── package.json              # Root orchestrator with concurrently
+└── README.md                 # Complete project documentation
+```
+
+---
+
+## 2. System Architecture
 
 ```mermaid
 flowchart TD
-    Client([Next.js Frontend / HTTP Client])
+    Client(["Next.js Frontend (Port 3000 / 3002)"])
     
     subgraph "HTTP Request Ingestion Layer (<50ms)"
         Controller["JobsController\n(POST /jobs/import)"]
@@ -71,22 +101,16 @@ flowchart TD
     Controller -->|Read current progress & status| PG
 ```
 
-### Architectural Highlights
-- **Decoupled Request-Response Cycle**: The HTTP layer never handles slow file processing. It validates input, persists an initial job record in PostgreSQL (`PENDING`), pushes the task payload to Redis via BullMQ, and immediately responds with `HTTP 202 Accepted` (< 50ms latency).
-- **Independent Scalability**: HTTP API nodes and background worker nodes can be scaled independently horizontally.
-- **Fail-Safe Persistence**: Every state transition (`PENDING` -> `PROCESSING` -> `COMPLETED` / `FAILED`) is logged to PostgreSQL with timestamped telemetry and attempt tracking.
-
 ---
 
-## 2. Next.js Frontend Dashboard (UI Guide)
+## 3. Next.js Frontend Dashboard (UI Features)
 
-A modern, responsive dark-mode dashboard built with **Next.js 14 (App Router)**, **React 18**, **TypeScript**, and **Tailwind CSS** located in the `frontend/` directory.
+Located in `frontend/`, the web dashboard provides an interface to observe background processing:
 
-### Visual Interface Features
 1. **Authentication (Sign In / Register Modal)**:
    - Modern glassmorphic dialog with tabbed Login & Register forms.
    - Saves JWT in `localStorage` and automatically attaches `Bearer <token>` to requests.
-   - **Quick-Fill Demo Users**: Includes one-click `User A` and `User B` buttons to easily switch sessions and observe strict user row isolation.
+   - **Quick-Fill Demo Users**: One-click `User A` and `User B` buttons to easily switch accounts and verify strict user row isolation.
 
 2. **Data Import Panel**:
    - Accepts CSV or JSON payloads.
@@ -96,9 +120,9 @@ A modern, responsive dark-mode dashboard built with **Next.js 14 (App Router)**,
 3. **Live Latency Meter Banner**:
    - Visually benchmarks asynchronous decoupling:
      ```
-     ⚡ API responded in 32 ms with HTTP 202 Accepted (Job ID: cc61b8c4-f910-42a2...)
+     ⚡ API responded in 27 ms with HTTP 202 Accepted (Job ID: a0ffe0f9-7cfb...)
      ```
-   - Confirms that the request was acknowledged in under 50ms without waiting for background worker execution.
+   - Confirms that the request was acknowledged in under 50ms without waiting for worker execution.
 
 4. **Real-Time Job Progress Tracker**:
    - Polls `GET /jobs/:id` every 1.5 seconds.
@@ -121,26 +145,6 @@ A modern, responsive dark-mode dashboard built with **Next.js 14 (App Router)**,
    - Displays all historical jobs for the authenticated user.
    - Inspect button allows clicking any historical job to load its telemetry and progress into the tracker.
    - Proves that logging in as User B shows zero records from User A.
-
----
-
-## 3. Interactive API Documentation & Swagger
-
-When running locally or deployed, interactive Swagger documentation with OpenAPI 3.0 schema definitions is available at:
-```
-http://localhost:3001/api/docs
-```
-
-### Core Endpoints Reference
-
-| Method | Endpoint | Description | Auth Required | Success Status |
-| :--- | :--- | :--- | :---: | :--- |
-| `POST` | `/auth/register` | Register a new user | No | `201 Created` |
-| `POST` | `/auth/login` | Log in and obtain Bearer JWT | No | `200 OK` |
-| `POST` | `/jobs/import` | Submit data/CSV import job | **Yes** | `202 Accepted` |
-| `GET` | `/jobs/:id` | Get job status, progress, results | **Yes** | `200 OK` (or `404`) |
-| `GET` | `/jobs` | List all jobs of authenticated user | **Yes** | `200 OK` |
-| `GET` | `/jobs/:id/records` | List records imported by job | **Yes** | `200 OK` |
 
 ---
 
@@ -181,43 +185,30 @@ A major requirement of resilient distributed systems is answering the critical q
 
 In poorly architected systems, jobs remain stuck in `PROCESSING` forever and *"nobody finds out"*. This service provides comprehensive crash and failure recovery:
 
-### 1. Lock Duration & Heartbeat Mechanism
-When a worker picks up a job from Redis, BullMQ acquires a distributed lock:
-- `lockDuration`: Set to **30,000 ms (30s)**.
-- While active and healthy, the worker periodically renews the lock.
+1. **Lock Duration & Heartbeat Mechanism**:
+   When a worker picks up a job from Redis, BullMQ acquires a distributed lock:
+   - `lockDuration`: Set to **30,000 ms (30s)**.
+   - While active and healthy, the worker periodically renews the lock.
 
-### 2. Stalled Job Detection & Automatic Re-Queue
-If the worker process abruptly dies (e.g., `SIGKILL`, OOM crash, container restart):
-1. The worker stops sending heartbeats and the 30-second lock expires.
-2. BullMQ's built-in **Stalled Job Supervisor** (`stalledInterval: 15000`) detects the lock expiration every 15 seconds.
-3. The supervisor moves the orphaned job back into the active queue and triggers a retry.
-4. An alert event `@OnWorkerEvent('stalled')` is emitted:
-   ```
-   [WORKER HEARTBEAT ALERT] Job <id> has stalled! Worker may have crashed or timed out. BullMQ is triggering recovery.
-   ```
+2. **Stalled Job Detection & Automatic Re-Queue**:
+   If the worker process abruptly dies (e.g., `SIGKILL`, OOM crash, container restart):
+   - The worker stops sending heartbeats and the 30-second lock expires.
+   - BullMQ's built-in **Stalled Job Supervisor** (`stalledInterval: 15000`) detects the lock expiration every 15 seconds.
+   - The supervisor moves the orphaned job back into the active queue and triggers a retry.
+   - An alert event `@OnWorkerEvent('stalled')` is emitted.
 
-### 3. Exponential Backoff Retries
-- Each job is configured with `attempts: 3` and exponential backoff:
-  ```ts
-  backoff: {
-    type: 'exponential',
-    delay: 1000,
-  }
-  ```
-- Attempt 1: Immediate execution.
-- Attempt 2: Re-attempted after 1,000 ms delay.
-- Attempt 3: Re-attempted after 2,000 ms delay.
+3. **Exponential Backoff Retries**:
+   - Each job is configured with `attempts: 3` and exponential backoff (`delay: 1000`).
 
-### 4. Poison Pills & Permanent Failure Transitions
-If a job is inherently defective (e.g., corrupt payload, database constraint violation, or persistent crash) and all 3 retry attempts are exhausted:
-1. The job transitions to the terminal status **`FAILED`** in PostgreSQL.
-2. Complete failure telemetry (error message, stack trace, attempt counts, timestamps) is persisted to `jobs.error_message`.
-3. A critical telemetry alert is logged:
-   ```
-   [CRITICAL ALERT] Job <id> (User: <user_id>) permanently FAILED after 3 attempts! Telemetry: <stack_trace>
-   ```
-4. Callers polling `GET /jobs/:id` receive the failure details and completed timestamp.
-5. **The answer is NEVER "nobody finds out."**
+4. **Poison Pills & Permanent Failure Transitions**:
+   If a job is defective and all 3 retry attempts are exhausted:
+   - The job transitions to the terminal status **`FAILED`** in PostgreSQL.
+   - Complete failure telemetry (error message, stack trace, attempt counts, timestamps) is persisted to `jobs.error_message`.
+   - A critical telemetry alert is logged:
+     ```
+     [CRITICAL ALERT] Job <id> (User: <user_id>) permanently FAILED after 3 attempts! Telemetry: <stack_trace>
+     ```
+   - **The answer is NEVER "nobody finds out."**
 
 ---
 
@@ -276,22 +267,32 @@ This service adheres strictly to **Variant A** data isolation standards:
 
 ---
 
-## 8. Local Setup & Quick-Start
+## 8. Quick-Start & Monorepo Orchestration
 
-### Prerequisites
-- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/) installed.
-- Node.js 20+ (for local CLI development).
+### Root NPM Scripts Reference
 
-### 1. Clone & Configure Environment
+| Command | Action |
+| :--- | :--- |
+| `npm run dev` | Runs both NestJS API (`start:dev`) and Next.js Frontend (`dev`) concurrently |
+| `npm run build` | Compiles both `backend/` and `frontend/` production bundles |
+| `npm test` | Runs backend unit tests |
+| `npm run test:e2e` | Runs complete 11-case automated E2E test suite |
+| `npm run docker:up` | Boots PostgreSQL 16, Redis 7, NestJS API, and Frontend in Docker Compose |
+| `npm run docker:down` | Gracefully stops all Docker containers and networks |
+
+### 1. Local Development Mode
 ```bash
-cp .env.example .env
-cp frontend/.env.local frontend/.env.local
+# 1. Start PostgreSQL (port 5434) and Redis (port 6380)
+docker compose up -d postgres redis
+
+# 2. Launch both Backend & Frontend simultaneously with colored log multiplexing
+npm run dev
 ```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser!
 
-### 2. Launch Full Stack with Docker Compose
-Run the entire production stack (PostgreSQL 16, Redis 7, NestJS API, and Next.js Frontend) with a single command:
+### 2. Full Docker Stack Mode
 ```bash
-docker compose up --build -d
+npm run docker:up
 ```
 
 ### Port Mappings
@@ -302,34 +303,22 @@ docker compose up --build -d
 | **PostgreSQL** | `5434` | `5432` | PostgreSQL 16 Database |
 | **Redis** | `6380` | `6379` | Redis 7 BullMQ Queue |
 
-### 3. Local Development Mode (Without Docker)
-To run both backend and frontend concurrently with hot-reload:
-```bash
-# Start background containers
-docker compose up -d postgres redis
-
-# Run both NestJS API and Next.js Frontend
-npm run dev:all
-```
-Open **[http://localhost:3000](http://localhost:3000)** in your browser!
-
 ---
 
 ## 9. Automated Test Suite
 
-The project includes an end-to-end (E2E) test suite (`test/jobs.e2e-spec.ts`) validating all acceptance criteria:
-1. Route protection: Unauthenticated requests return `401 Unauthorized`.
-2. Asynchronous Decoupling: `POST /jobs/import` returns `202 Accepted` within `< 100ms` (measured ~25ms - 45ms).
-3. User Row Isolation: User A cannot read, query, or view User B's jobs or records (returns `404`).
-4. Worker Execution: Background worker transitions job status to `COMPLETED` and progress to `100%`.
-5. Worker Idempotency: Re-submitting identical datasets updates existing records with 0 duplicate rows.
-6. CSV String Parsing: Asynchronously ingests raw CSV format.
-7. Worker Crash & Failure Recovery: Retries poison-pill jobs up to 3 times, transitions to `FAILED`, and records telemetry.
-
-### Running the E2E Suite
+Run the full end-to-end suite from the root monorepo directory:
 ```bash
 npm run test:e2e
 ```
+Validates:
+- Protected routes return `401 Unauthorized`.
+- Fast HTTP 202 decoupling (`< 100ms`).
+- Strict user row isolation (cross-user queries return `404`).
+- Background worker execution to `COMPLETED` and 100% progress.
+- Idempotent duplicate replay produces 0 duplicate records.
+- CSV string ingestion format support.
+- Worker crash & poison pill retry exhaustion to `FAILED` with telemetry.
 
 ---
 
@@ -346,7 +335,8 @@ npm run test:e2e
 
 3. **Deploy Backend Service**:
    - Click **+ New** -> **GitHub Repo** -> select this repository.
-   - Railway builds the root `Dockerfile`.
+   - Set root directory: `backend`.
+   - Railway builds `backend/Dockerfile`.
    - Set environment variables:
      - `DATABASE_URL`: `${{Postgres.DATABASE_URL}}`
      - `REDIS_URL`: `${{Redis.REDIS_URL}}`
@@ -354,8 +344,9 @@ npm run test:e2e
      - `PORT`: `3000`
 
 4. **Deploy Frontend Service**:
-   - Click **+ New** -> **GitHub Repo** -> select the same repository.
+   - Click **+ New** -> **GitHub Repo** -> select this repository.
    - Set root directory: `frontend`.
+   - Railway builds `frontend/Dockerfile`.
    - Set environment variables:
      - `NEXT_PUBLIC_API_URL`: Public URL of your deployed Backend service.
 

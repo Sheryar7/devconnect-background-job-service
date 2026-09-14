@@ -36,7 +36,7 @@ services:
 
   api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
       target: runner
     container_name: background_job_api
