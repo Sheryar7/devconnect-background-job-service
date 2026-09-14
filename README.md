@@ -1,26 +1,30 @@
-# Asynchronous Background Job Processing Service
+# Asynchronous Background Job Processing Service & Dashboard
 
 [![NestJS](https://img.shields.io/badge/NestJS-10.3-E0234E?style=flat&logo=nestjs&logoColor=white)](https://nestjs.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-14.2-000000?style=flat&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-18.3-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-BullMQ-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
 [![Tests](https://img.shields.io/badge/Tests-E2E%20Passing-brightgreen?style=flat)](./test/jobs.e2e-spec.ts)
 
-A production-grade, distributed asynchronous data import and processing engine built with **NestJS**, **TypeScript**, **PostgreSQL 16**, and **Redis (BullMQ)**. Designed strictly according to the *Final Project: Service with a Job Running Behind It (Brief B)* specification.
+A production-grade, distributed asynchronous data import and processing engine built with **NestJS**, **TypeScript**, **PostgreSQL 16**, and **Redis (BullMQ)**, accompanied by a modern **Next.js (App Router) & Tailwind CSS Frontend Dashboard**. Designed strictly according to the *Final Project: Service with a Job Running Behind It (Brief B)* specification.
 
 ---
 
-## ?? Table of Contents
+## 📑 Table of Contents
 - [1. Architecture Overview](#1-architecture-overview)
-- [2. Interactive API Documentation & Swagger](#2-interactive-api-documentation--swagger)
-- [3. Fast Request Path & Asynchronous Decoupling](#3-fast-request-path--asynchronous-decoupling)
-- [4. Worker Failure Recovery (When the Worker Dies Mid-Job)](#4-worker-failure-recovery-when-the-worker-dies-mid-job)
-- [5. Idempotent Processing Guarantees](#5-idempotent-processing-guarantees)
-- [6. Authentication & User Row Isolation](#6-authentication--user-row-isolation)
-- [7. Local Setup & Docker Compose](#7-local-setup--docker-compose)
-- [8. Automated Test Suite](#8-automated-test-suite)
-- [9. Production Cloud Deployment Guide](#9-production-cloud-deployment-guide)
+- [2. Next.js Frontend Dashboard (UI Guide)](#2-nextjs-frontend-dashboard-ui-guide)
+- [3. Interactive API Documentation & Swagger](#3-interactive-api-documentation--swagger)
+- [4. Fast Request Path & Asynchronous Decoupling](#4-fast-request-path--asynchronous-decoupling)
+- [5. Worker Failure Recovery (When the Worker Dies Mid-Job)](#5-worker-failure-recovery-when-the-worker-dies-mid-job)
+- [6. Idempotent Processing Guarantees](#6-idempotent-processing-guarantees)
+- [7. Authentication & User Row Isolation](#7-authentication--user-row-isolation)
+- [8. Local Setup & Quick-Start](#8-local-setup--quick-start)
+- [9. Automated Test Suite](#9-automated-test-suite)
+- [10. Production Cloud Deployment Guide](#10-production-cloud-deployment-guide)
 
 ---
 
@@ -28,7 +32,7 @@ A production-grade, distributed asynchronous data import and processing engine b
 
 ```mermaid
 flowchart TD
-    Client([Client / Frontend / Postman])
+    Client([Next.js Frontend / HTTP Client])
     
     subgraph "HTTP Request Ingestion Layer (<50ms)"
         Controller["JobsController\n(POST /jobs/import)"]
@@ -63,24 +67,69 @@ flowchart TD
     Worker -->|10. Final status: COMPLETED or FAILED with Telemetry| PG
     
     Supervisor -.->|Monitors stalled jobs if worker killed mid-run| Queue
-    Client -->|Polling: GET /jobs/:id| Controller
+    Client -->|Polling: GET /jobs/:id every 1.5s| Controller
     Controller -->|Read current progress & status| PG
 ```
 
 ### Architectural Highlights
-- **Decoupled Request-Response Cycle**: The HTTP layer never handles data processing. It validates input, creates a persistent job record in PostgreSQL (`PENDING`), enqueues the task in Redis via BullMQ, and immediately responds with `HTTP 202 Accepted` (< 50ms latency).
+- **Decoupled Request-Response Cycle**: The HTTP layer never handles slow file processing. It validates input, persists an initial job record in PostgreSQL (`PENDING`), pushes the task payload to Redis via BullMQ, and immediately responds with `HTTP 202 Accepted` (< 50ms latency).
 - **Independent Scalability**: HTTP API nodes and background worker nodes can be scaled independently horizontally.
-- **Fail-Safe Persistence**: Every state transition (`PENDING` -> `PROCESSING` -> `COMPLETED` / `FAILED`) is logged to PostgreSQL with timestamped telemetry.
+- **Fail-Safe Persistence**: Every state transition (`PENDING` -> `PROCESSING` -> `COMPLETED` / `FAILED`) is logged to PostgreSQL with timestamped telemetry and attempt tracking.
 
 ---
 
-## 2. Interactive API Documentation & Swagger
+## 2. Next.js Frontend Dashboard (UI Guide)
+
+A modern, responsive dark-mode dashboard built with **Next.js 14 (App Router)**, **React 18**, **TypeScript**, and **Tailwind CSS** located in the `frontend/` directory.
+
+### Visual Interface Features
+1. **Authentication (Sign In / Register Modal)**:
+   - Modern glassmorphic dialog with tabbed Login & Register forms.
+   - Saves JWT in `localStorage` and automatically attaches `Bearer <token>` to requests.
+   - **Quick-Fill Demo Users**: Includes one-click `User A` and `User B` buttons to easily switch sessions and observe strict user row isolation.
+
+2. **Data Import Panel**:
+   - Accepts CSV or JSON payloads.
+   - **Quick Action**: `Load Sample Dataset (1,000 records)` instantly generates 1,000 realistic product records (`SKU-1001` to `SKU-2000`) with prices, categories, and stock numbers.
+   - **Quick Action**: `Load Small Batch (5 records)` for rapid verification.
+
+3. **Live Latency Meter Banner**:
+   - Visually benchmarks asynchronous decoupling:
+     ```
+     ⚡ API responded in 32 ms with HTTP 202 Accepted (Job ID: cc61b8c4-f910-42a2...)
+     ```
+   - Confirms that the request was acknowledged in under 50ms without waiting for background worker execution.
+
+4. **Real-Time Job Progress Tracker**:
+   - Polls `GET /jobs/:id` every 1.5 seconds.
+   - Animated status badge with color coding:
+     - 🟡 **PENDING** (Queued in Redis) with pulse effect
+     - 🔵 **PROCESSING** (Background worker active) with spinning indicator
+     - 🟢 **COMPLETED** (All rows inserted into PostgreSQL)
+     - 🔴 **FAILED** (Worker crash or poison pill failure details displayed)
+   - Dynamic progress bar showing `0%` to `100%` processing progress.
+   - Row counter: `Processed: 1,000 / 1,000 rows`.
+   - Execution metrics: total rows, new inserts, deduplicated count, execution time in ms.
+
+5. **Idempotency Test Action**:
+   - Dedicated **"Test Duplicate Execution"** button: Re-submits the exact same payload/hash and observes the worker processing it again with:
+     ```
+     Deduplicated/Updated: 1,000, New Records: 0 (0 duplicates created!)
+     ```
+
+6. **Job History & Row Isolation Table**:
+   - Displays all historical jobs for the authenticated user.
+   - Inspect button allows clicking any historical job to load its telemetry and progress into the tracker.
+   - Proves that logging in as User B shows zero records from User A.
+
+---
+
+## 3. Interactive API Documentation & Swagger
 
 When running locally or deployed, interactive Swagger documentation with OpenAPI 3.0 schema definitions is available at:
 ```
 http://localhost:3001/api/docs
 ```
-*(Or `http://localhost:3000/api/docs` depending on mapped port)*
 
 ### Core Endpoints Reference
 
@@ -95,7 +144,7 @@ http://localhost:3001/api/docs
 
 ---
 
-## 3. Fast Request Path & Asynchronous Decoupling
+## 4. Fast Request Path & Asynchronous Decoupling
 
 The `POST /jobs/import` endpoint returns immediately with `HTTP 202 Accepted` rather than forcing the caller to wait for CSV/data processing:
 
@@ -123,20 +172,9 @@ curl -X POST http://localhost:3001/jobs/import \
 }
 ```
 
-### Raw CSV String Ingestion Support
-The endpoint also supports raw CSV text payloads:
-```bash
-curl -X POST http://localhost:3001/jobs/import \
-  -H "Authorization: Bearer <JWT_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "csvContent": "externalId,name,price,category\nSKU-2001,4K Monitor,399.99,Displays\nSKU-2002,USB-C Hub,59.99,Accessories"
-  }'
-```
-
 ---
 
-## 4. Worker Failure Recovery (When the Worker Dies Mid-Job)
+## 5. Worker Failure Recovery (When the Worker Dies Mid-Job)
 
 A major requirement of resilient distributed systems is answering the critical question:
 > **"What happens if the worker process is killed or crashes halfway through a job?"**
@@ -178,23 +216,12 @@ If a job is inherently defective (e.g., corrupt payload, database constraint vio
    ```
    [CRITICAL ALERT] Job <id> (User: <user_id>) permanently FAILED after 3 attempts! Telemetry: <stack_trace>
    ```
-4. Callers polling `GET /jobs/:id` immediately receive:
-   ```json
-   {
-     "id": "cc461a85-dfab-4bf5-bfb9-d687b400315e",
-     "status": "FAILED",
-     "progress": 0,
-     "attempts": 3,
-     "maxAttempts": 3,
-     "errorMessage": "Permanent failure after 3 attempts: Simulated worker process crash / corrupt data payload",
-     "completedAt": "2026-09-14T15:45:00.000Z"
-   }
-   ```
+4. Callers polling `GET /jobs/:id` receive the failure details and completed timestamp.
 5. **The answer is NEVER "nobody finds out."**
 
 ---
 
-## 5. Idempotent Processing Guarantees
+## 6. Idempotent Processing Guarantees
 
 Because background jobs may be retried after a worker crash or re-triggered by users, background execution must be **strictly idempotent**:
 > **"Running the exact same background job twice produces the EXACT same final outcome without inserting duplicate rows."**
@@ -232,14 +259,9 @@ Because background jobs may be retried after a worker crash or re-triggered by u
    - If the record does not exist: it is inserted as a new row (`insertedCount++`).
    - If the record already exists: it safely updates data and pointers without inserting a duplicate (`updatedCount++`).
 
-### Verification
-If a job with 5 records is executed:
-- **1st Run**: 5 records inserted, total count in DB = 5.
-- **2nd Run (Replay)**: 5 records updated/upserted, 0 duplicates created, total count in DB = 5.
-
 ---
 
-## 6. Authentication & User Row Isolation
+## 7. Authentication & User Row Isolation
 
 This service adheres strictly to **Variant A** data isolation standards:
 
@@ -254,7 +276,7 @@ This service adheres strictly to **Variant A** data isolation standards:
 
 ---
 
-## 7. Local Setup & Docker Compose
+## 8. Local Setup & Quick-Start
 
 ### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/) installed.
@@ -263,38 +285,37 @@ This service adheres strictly to **Variant A** data isolation standards:
 ### 1. Clone & Configure Environment
 ```bash
 cp .env.example .env
+cp frontend/.env.local frontend/.env.local
 ```
-Default ports configured to avoid standard port collisions:
-- Application API: `3001` (mapped to container port `3000`)
-- PostgreSQL: `5434`
-- Redis: `6380`
 
-### 2. One-Command Full Stack Boot
-Run the entire production stack (PostgreSQL, Redis, and API) via Docker Compose:
+### 2. Launch Full Stack with Docker Compose
+Run the entire production stack (PostgreSQL 16, Redis 7, NestJS API, and Next.js Frontend) with a single command:
 ```bash
 docker compose up --build -d
 ```
 
-### 3. Verify Container Health
-```bash
-docker compose ps
-```
-Expected output:
-```
-NAME                      IMAGE                        STATUS                    PORTS
-background_job_api        background-job-service-api   Up                        0.0.0.0:3001->3000/tcp
-background_job_postgres   postgres:16-alpine           Up (healthy)              0.0.0.0:5434->5432/tcp
-background_job_redis      redis:7-alpine               Up (healthy)              0.0.0.0:6380->6379/tcp
-```
+### Port Mappings
+| Service | Host Port | Internal Port | Description |
+| :--- | :--- | :--- | :--- |
+| **Frontend UI** | `3000` (or `3002`) | `3000` | Next.js Web Dashboard |
+| **Backend API** | `3001` | `3000` | NestJS REST API & Swagger |
+| **PostgreSQL** | `5434` | `5432` | PostgreSQL 16 Database |
+| **Redis** | `6380` | `6379` | Redis 7 BullMQ Queue |
 
-### 4. View Container Logs
+### 3. Local Development Mode (Without Docker)
+To run both backend and frontend concurrently with hot-reload:
 ```bash
-docker compose logs api -f
+# Start background containers
+docker compose up -d postgres redis
+
+# Run both NestJS API and Next.js Frontend
+npm run dev:all
 ```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser!
 
 ---
 
-## 8. Automated Test Suite
+## 9. Automated Test Suite
 
 The project includes an end-to-end (E2E) test suite (`test/jobs.e2e-spec.ts`) validating all acceptance criteria:
 1. Route protection: Unauthenticated requests return `401 Unauthorized`.
@@ -312,11 +333,9 @@ npm run test:e2e
 
 ---
 
-## 9. Production Cloud Deployment Guide
+## 10. Production Cloud Deployment Guide
 
-The multi-stage `Dockerfile` is optimized for zero-configuration deployment on modern container platforms (e.g. **Railway**, **Render**, **Fly.io**).
-
-### Free Cloud Deployment on Railway
+### Deployment on Railway (Full Stack)
 
 1. **Create a Railway Account & New Project**:
    - Go to [railway.app](https://railway.app/) and click **New Project**.
@@ -325,27 +344,26 @@ The multi-stage `Dockerfile` is optimized for zero-configuration deployment on m
    - Click **+ New** -> **Database** -> **Add PostgreSQL**.
    - Click **+ New** -> **Database** -> **Add Redis**.
 
-3. **Deploy the Service Container**:
-   - Click **+ New** -> **GitHub Repo** (or deploy via Railway CLI: `railway up`).
-   - Railway automatically detects the root `Dockerfile` and builds the production multi-stage image.
+3. **Deploy Backend Service**:
+   - Click **+ New** -> **GitHub Repo** -> select this repository.
+   - Railway builds the root `Dockerfile`.
+   - Set environment variables:
+     - `DATABASE_URL`: `${{Postgres.DATABASE_URL}}`
+     - `REDIS_URL`: `${{Redis.REDIS_URL}}`
+     - `JWT_SECRET`: Generate a random 32-char secret
+     - `PORT`: `3000`
 
-4. **Configure Environment Variables**:
-   In your Service settings, add the following variables:
-   | Variable | Value Reference / Example |
-   | :--- | :--- |
-   | `NODE_ENV` | `production` |
-   | `PORT` | `3000` |
-   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
-   | `REDIS_URL` | `${{Redis.REDIS_URL}}` |
-   | `JWT_SECRET` | Strong production secret (e.g. `openssl rand -hex 32`) |
-   | `JWT_EXPIRES_IN`| `1d` |
+4. **Deploy Frontend Service**:
+   - Click **+ New** -> **GitHub Repo** -> select the same repository.
+   - Set root directory: `frontend`.
+   - Set environment variables:
+     - `NEXT_PUBLIC_API_URL`: Public URL of your deployed Backend service.
 
-5. **Generate Public Domain**:
-   - Under Service -> **Settings** -> **Networking**, click **Generate Domain**.
-   - Your service is now live with public SSL (e.g., `https://background-job-service-production.up.railway.app`).
-   - Access Swagger docs at `https://<your-domain>/api/docs`.
+5. **Access Live Services**:
+   - Open frontend domain in browser.
+   - Test user registration, sample dataset load (1,000 records), live latency meter, and real-time worker tracking!
 
 ---
 
-## ?? License
+## 📄 License
 This project is licensed under the MIT License.
