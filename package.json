@@ -4,7 +4,7 @@
   "private": true,
   "description": "Monorepo orchestrating Background Job Service backend and Next.js frontend",
   "scripts": {
-    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"cyan,magenta\" \"npm run --prefix backend start:dev\" \"npm run --prefix frontend dev\"",
+    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"cyan,magenta\" \"cd backend && npm run start:dev\" \"cd frontend && npm run dev\"",
     "build": "npm run --prefix backend build && npm run --prefix frontend build",
     "test": "npm run --prefix backend test",
     "test:e2e": "npm run --prefix backend test:e2e",
