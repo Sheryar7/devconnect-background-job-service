@@ -35,4 +35,5 @@ Thumbs.db
 *.sql
 *.log
 scratch/
-temp/
+temp/.venv/
+.venv*/
