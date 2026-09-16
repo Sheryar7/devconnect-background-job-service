@@ -136,6 +136,7 @@ erDiagram
         timestamptz updated_at "Record modification timestamp"
     }
 
+
     imported_records {
         uuid id PK "uuid_generate_v4()"
         uuid user_id FK "References users(id) ON DELETE CASCADE"
@@ -786,7 +787,9 @@ The repository includes a comprehensive End-to-End (E2E) integration test suite 
    - User B listing jobs does NOT see User A's jobs.
    - User B accessing records of User A's job returns `404 Not Found`.
 4. **Background Worker Execution and State Transition**:
-   - Verifies transition from `PENDING` $ightarrow$ `PROCESSING` $ightarrow$ `COMPLETED` with 100% progress.
+   - Verifies transition from `PENDING` $
+ightarrow$ `PROCESSING` $
+ightarrow$ `COMPLETED` with 100% progress.
 5. **Idempotent Duplicate Execution**:
    - Replays the identical dataset twice; asserts that zero duplicate records are created in PostgreSQL (record count remains 3, not 6).
 6. **CSV Raw String Data Ingestion**:
