@@ -24,6 +24,7 @@ async function bootstrap() {
     }),
   );
 
+  // Swagger API Documentation
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Background Job Processing Service')
     .setDescription(
