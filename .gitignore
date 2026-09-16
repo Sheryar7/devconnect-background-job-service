@@ -38,5 +38,6 @@ scratch/
 temp/.venv/
 .venv*/
 
-echo "SYSTEM_DESIGN_AND_CONCEPTS.*" >> .gitignore
-echo "~$*.docx" >> .gitignore
+eSYSTEM_DESIGN_AND_CONCEPTS.*
+~$*.docx
+*.docx
