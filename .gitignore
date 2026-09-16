@@ -37,3 +37,6 @@ Thumbs.db
 scratch/
 temp/.venv/
 .venv*/
+
+echo "SYSTEM_DESIGN_AND_CONCEPTS.*" >> .gitignore
+echo "~$*.docx" >> .gitignore
